@@ -47,7 +47,6 @@ public class MainActivity extends AppCompatActivity {
 
         btn_download.setOnClickListener(view -> {
             new DownloadFile(apiInterface, getApplicationContext()).download();
-            Toast.makeText(MainActivity.this, "file downloaded", Toast.LENGTH_SHORT).show();
         });
 
     }
