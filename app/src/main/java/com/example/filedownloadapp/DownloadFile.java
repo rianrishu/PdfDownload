@@ -1,8 +1,20 @@
 package com.example.filedownloadapp;
 
-import android.os.AsyncTask;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.content.Context;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.net.Uri;
+import android.os.Build;
 import android.os.Environment;
 import android.util.Log;
+
+import androidx.core.app.ActivityCompat;
+import androidx.core.app.NotificationCompat;
+import androidx.core.app.NotificationManagerCompat;
+import androidx.core.content.FileProvider;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -10,45 +22,61 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 
+import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers;
+import io.reactivex.rxjava3.core.Observer;
+import io.reactivex.rxjava3.disposables.Disposable;
+import io.reactivex.rxjava3.schedulers.Schedulers;
 import okhttp3.ResponseBody;
-import retrofit2.Call;
-import retrofit2.Response;
 
-public class DownloadFile extends AsyncTask<Void, Void, Void> {
+public class DownloadFile {
     private String fileName = "dummy.pdf";
-    ApiInterface apiInterface;
+    private ApiInterface apiInterface;
+    private Context context;
 
-    DownloadFile(ApiInterface apiInterface){
+    DownloadFile(ApiInterface apiInterface, Context context) {
         this.apiInterface = apiInterface;
+        this.context = context;
     }
 
 
-    @Override
-    protected Void doInBackground(Void... voids) {
-        Call<ResponseBody> responseBodyCall = this.apiInterface.downloadFile();
-        String TAG = "doInBackground";
-        try {
-            Response<ResponseBody> response = responseBodyCall.execute();
-            if (response.isSuccessful()) {
-                // Save the file to the Download folder
-                boolean success = saveToDownloadFolder(response.body(), fileName);
-                if (success) {
-                    Log.d(TAG, "File saved to Download folder");
-                } else {
-                    Log.e(TAG, "Failed to save file to Download folder");
-                }
-            } else {
-                Log.e(TAG, "Download failed with error code " + response.code());
-            }
-        } catch (IOException e) {
-            Log.e(TAG, "Download failed", e);
-        }
-        return null;
+    public void download() {
+        String TAG = "downloadFile";
+        apiInterface.downloadFile()
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(new Observer<ResponseBody>() {
+                    @Override
+                    public void onSubscribe(Disposable d) {
+                        // Do nothing
+                    }
+
+                    @Override
+                    public void onNext(ResponseBody responseBody) {
+                        boolean success = saveToDownloadFolder(responseBody, fileName);
+                        if (success) {
+                            Log.d(TAG, "File saved to Download folder");
+                            showNotification(fileName);
+                        } else {
+                            Log.e(TAG, "Failed to save file to Download folder");
+                        }
+                    }
+
+                    @Override
+                    public void onError(Throwable e) {
+                        Log.e(TAG, "Download failed", e);
+                    }
+
+                    @Override
+                    public void onComplete() {
+                        // Do nothing
+                    }
+                });
     }
 
     private boolean saveToDownloadFolder(ResponseBody body, String fileName) {
         String TAG = "saveToDownloadFolder";
         try {
+
             File downloadFolder = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
 
             File file = new File(downloadFolder, fileName);
@@ -82,5 +110,41 @@ public class DownloadFile extends AsyncTask<Void, Void, Void> {
             Log.e(TAG, "Failed to create file in Download folder", e);
             return false;
         }
+    }
+
+    private void showNotification(String fileName) {
+        File file = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), fileName);
+        Uri fileUri = FileProvider.getUriForFile(context, BuildConfig.APPLICATION_ID + ".fileprovider", file);
+
+        Intent intent = new Intent(Intent.ACTION_VIEW);
+        intent.setDataAndType(fileUri, "application/pdf");
+        intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+
+        PendingIntent pendingIntent = PendingIntent.getActivity(context, 0, intent, PendingIntent.FLAG_IMMUTABLE);
+
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(context, "download_channel")
+                .setSmallIcon(R.drawable.ic_launcher_background)
+                .setContentTitle("Download complete")
+                .setContentText("File downloaded: " + fileName)
+                .setAutoCancel(true)
+                .setContentIntent(pendingIntent);
+
+
+        NotificationManagerCompat notificationManager = NotificationManagerCompat.from(context);
+
+        if (ActivityCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            return;
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel(
+                    "download_channel",
+                    "Download Channel",
+                    NotificationManager.IMPORTANCE_HIGH);
+            channel.setDescription("Notifications for file downloads");
+            notificationManager.createNotificationChannel(channel);
+        }
+
+        notificationManager.notify(123, builder.build());
     }
 }

@@ -1,5 +1,6 @@
 package com.example.filedownloadapp;
 
+import io.reactivex.rxjava3.core.Observable;
 import okhttp3.ResponseBody;
 import retrofit2.Call;
 import retrofit2.http.GET;
@@ -9,6 +10,6 @@ public interface ApiInterface {
 
     @Streaming
     @GET("dummy.pdf")
-    Call<ResponseBody> downloadFile();
+    Observable<ResponseBody> downloadFile();
 }
 
