@@ -51,9 +51,7 @@ public class DownloadFile {
                     } else {
                         Log.e(TAG, "Failed to save file to Download folder");
                     }
-                }, e -> {
-                    Log.e(TAG, "Download failed", e);
-                });
+                }, e -> Log.e(TAG, "Download failed", e));
     }
 
     private boolean saveToDownloadFolder(ResponseBody body, String fileName) {
@@ -62,7 +60,7 @@ public class DownloadFile {
         File downloadFolder = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
 
         File file = new File(downloadFolder, fileName);
-        try (InputStream inputStream = body.byteStream(); OutputStream outputStream = new FileOutputStream(file);) {
+        try (InputStream inputStream = body.byteStream(); OutputStream outputStream = new FileOutputStream(file)) {
             byte[] fileReader = new byte[5000];
             while (true) {
                 int read = inputStream.read(fileReader);
