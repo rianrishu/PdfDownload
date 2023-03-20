@@ -1,5 +1,6 @@
 package com.example.filedownloadapp;
 
+
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
@@ -23,8 +24,6 @@ import java.io.InputStream;
 import java.io.OutputStream;
 
 import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers;
-import io.reactivex.rxjava3.core.Observer;
-import io.reactivex.rxjava3.disposables.Disposable;
 import io.reactivex.rxjava3.schedulers.Schedulers;
 import okhttp3.ResponseBody;
 
@@ -44,70 +43,38 @@ public class DownloadFile {
         apiInterface.downloadFile()
                 .subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())
-                .subscribe(new Observer<ResponseBody>() {
-                    @Override
-                    public void onSubscribe(Disposable d) {
-                        // Do nothing
+                .subscribe(responseBody -> {
+                    boolean success = saveToDownloadFolder(responseBody, fileName);
+                    if (success) {
+                        Log.d(TAG, "File saved to Download folder");
+                        showNotification(fileName);
+                    } else {
+                        Log.e(TAG, "Failed to save file to Download folder");
                     }
-
-                    @Override
-                    public void onNext(ResponseBody responseBody) {
-                        boolean success = saveToDownloadFolder(responseBody, fileName);
-                        if (success) {
-                            Log.d(TAG, "File saved to Download folder");
-                            showNotification(fileName);
-                        } else {
-                            Log.e(TAG, "Failed to save file to Download folder");
-                        }
-                    }
-
-                    @Override
-                    public void onError(Throwable e) {
-                        Log.e(TAG, "Download failed", e);
-                    }
-
-                    @Override
-                    public void onComplete() {
-                        // Do nothing
-                    }
+                }, e -> {
+                    Log.e(TAG, "Download failed", e);
                 });
     }
 
     private boolean saveToDownloadFolder(ResponseBody body, String fileName) {
         String TAG = "saveToDownloadFolder";
-        try {
 
-            File downloadFolder = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+        File downloadFolder = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
 
-            File file = new File(downloadFolder, fileName);
-            InputStream inputStream = null;
-            OutputStream outputStream = null;
-            try {
-                byte[] fileReader = new byte[5000];
-                inputStream = body.byteStream();
-                outputStream = new FileOutputStream(file);
-                while (true) {
-                    int read = inputStream.read(fileReader);
-                    if (read == -1) {
-                        break;
-                    }
-                    outputStream.write(fileReader, 0, read);
+        File file = new File(downloadFolder, fileName);
+        try (InputStream inputStream = body.byteStream(); OutputStream outputStream = new FileOutputStream(file);) {
+            byte[] fileReader = new byte[5000];
+            while (true) {
+                int read = inputStream.read(fileReader);
+                if (read == -1) {
+                    break;
                 }
-                outputStream.flush();
-                return true;
-            } catch (IOException e) {
-                Log.e(TAG, "Failed to save file to Download folder", e);
-                return false;
-            } finally {
-                if (inputStream != null) {
-                    inputStream.close();
-                }
-                if (outputStream != null) {
-                    outputStream.close();
-                }
+                outputStream.write(fileReader, 0, read);
             }
+            outputStream.flush();
+            return true;
         } catch (IOException e) {
-            Log.e(TAG, "Failed to create file in Download folder", e);
+            Log.e(TAG, "Failed to save file to Download folder", e);
             return false;
         }
     }
@@ -132,10 +99,6 @@ public class DownloadFile {
 
         NotificationManagerCompat notificationManager = NotificationManagerCompat.from(context);
 
-        if (ActivityCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-            return;
-        }
-
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel channel = new NotificationChannel(
                     "download_channel",
@@ -143,6 +106,10 @@ public class DownloadFile {
                     NotificationManager.IMPORTANCE_HIGH);
             channel.setDescription("Notifications for file downloads");
             notificationManager.createNotificationChannel(channel);
+        }
+
+        if (ActivityCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            return;
         }
 
         notificationManager.notify(123, builder.build());
