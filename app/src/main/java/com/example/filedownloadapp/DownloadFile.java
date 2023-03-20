@@ -39,7 +39,7 @@ public class DownloadFile {
 
 
     public void download() {
-        String TAG = "downloadFile";
+        String TAG = "download";
         apiInterface.downloadFile()
                 .subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())
